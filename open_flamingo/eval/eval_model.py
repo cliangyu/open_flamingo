@@ -34,6 +34,7 @@ class BaseEvalModel(abc.ABC):
         max_generation_length: int,
         num_beams: int,
         length_penalty: float,
+        contrastive_decoding: bool = False,
     ) -> List[str]:
         """Get outputs for a batch of images and text.
 

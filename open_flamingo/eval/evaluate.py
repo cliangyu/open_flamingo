@@ -38,6 +38,13 @@ from open_flamingo.train.distributed import init_distributed_device, world_info_
 
 parser = argparse.ArgumentParser()
 
+# ConDe
+parser.add_argument(
+    "--conde",
+    action="store_true",
+    help="Whether to use contrastive decoding",
+)
+
 parser.add_argument(
     "--model",
     type=str,
@@ -847,6 +854,7 @@ def evaluate_captioning(
             max_generation_length=max_generation_length,
             num_beams=num_beams,
             length_penalty=length_penalty,
+            contrastive_decoding=args.conde,
         )
 
         new_predictions = [
@@ -1040,6 +1048,7 @@ def evaluate_vqa(
             max_generation_length=max_generation_length,
             num_beams=num_beams,
             length_penalty=length_penalty,
+            contrastive_decoding=args.conde,
         )
 
         process_function = (

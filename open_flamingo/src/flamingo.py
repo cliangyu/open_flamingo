@@ -9,7 +9,8 @@ from torch.distributed.fsdp.wrap import (
 from torch.distributed.fsdp import (
     FullyShardedDataParallel as FSDP,
 )
-from FlamingoGenerationMixin import FlamingoGenerationMixin
+from transformers.modeling_utils import PreTrainedModel
+from .FlamingoGenerationMixin import FlamingoGenerationMixin
 from .utils import apply_with_stopping_condition
 from math import log
 
@@ -100,9 +101,9 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
                 self.lang_encoder._use_cached_vision_x or vision_x is not None
         ), "Must provide either vision_x or have precached media using cache_media()."
 
-        if self.lang_encoder._use_cached_vision_x:
+        if self.lang_encoder._use_cached_vision_x and not contrastive_decoding:
             # Case: use cached; vision_x should be cached and other
-            # vision-related inputs should not be provided.
+            # vision-related inputs should not be provided. Contrastive decoding not supported.
             assert (
                     vision_x is None
             ), "Expect vision_x to be None when media has been cached using cache_media(). Try uncache_media() first."

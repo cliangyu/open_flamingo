@@ -128,6 +128,7 @@ class EvalModel(BaseEvalModel):
         max_generation_length: int,
         num_beams: int,
         length_penalty: float,
+        contrastive_decoding: bool,
     ) -> List[str]:
         """
         Get generation outputs.
@@ -145,6 +146,7 @@ class EvalModel(BaseEvalModel):
                     max_new_tokens=max_generation_length,
                     num_beams=num_beams,
                     length_penalty=length_penalty,
+                    contrastive_decoding=contrastive_decoding,
                 )
 
         # Extract only the new gnerated tokens
@@ -261,6 +263,7 @@ class EvalModel(BaseEvalModel):
         past_key_values: torch.Tensor = None,
         clear_conditioned_layers: bool = False,
         use_cache: bool = False,
+        contrastive_decoding: bool = False,
     ):
         """
         Calls the forward function of the model.
@@ -280,6 +283,7 @@ class EvalModel(BaseEvalModel):
                         clear_conditioned_layers=clear_conditioned_layers,
                         past_key_values=past_key_values,
                         use_cache=use_cache,
+                        contrastive_decoding=contrastive_decoding,
                     )
             return outputs
 
@@ -301,6 +305,7 @@ class EvalModel(BaseEvalModel):
                         clear_conditioned_layers=False,
                         past_key_values=past_key_values,
                         use_cache=True,
+                        ontrastive_decoding=contrastive_decoding,
                     )
 
             past_key_values = outputs.past_key_values

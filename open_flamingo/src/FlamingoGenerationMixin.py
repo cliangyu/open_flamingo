@@ -78,21 +78,21 @@ class FlamingoGenerationMixin(GenerationMixin):
             stopping_criteria = validate_stopping_criteria(stopping_criteria, max_length)
         if len(stopping_criteria) == 0:
             warnings.warn("You don't have defined any stopping_criteria, this will likely loop forever", UserWarning)
-        pad_token_id = pad_token_id if pad_token_id is not None else self.generation_config.pad_token_id
-        eos_token_id = eos_token_id if eos_token_id is not None else self.generation_config.eos_token_id
+        pad_token_id = pad_token_id if pad_token_id is not None else self.lang_encoder.generation_config.pad_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.lang_encoder.generation_config.eos_token_id
         if isinstance(eos_token_id, int):
             eos_token_id = [eos_token_id]
-        output_scores = output_scores if output_scores is not None else self.generation_config.output_scores
+        output_scores = output_scores if output_scores is not None else self.lang_encoder.generation_config.output_scores
         output_attentions = (
-            output_attentions if output_attentions is not None else self.generation_config.output_attentions
+            output_attentions if output_attentions is not None else self.lang_encoder.generation_config.output_attentions
         )
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.generation_config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.lang_encoder.generation_config.output_hidden_states
         )
         return_dict_in_generate = (
             return_dict_in_generate
             if return_dict_in_generate is not None
-            else self.generation_config.return_dict_in_generate
+            else self.lang_encoder.generation_config.return_dict_in_generate
         )
 
         batch_size = len(beam_scorer._beam_hyps)
@@ -115,7 +115,7 @@ class FlamingoGenerationMixin(GenerationMixin):
         decoder_hidden_states = () if (return_dict_in_generate and output_hidden_states) else None
 
         # if model is an encoder-decoder, retrieve encoder attention weights and hidden states
-        if return_dict_in_generate and self.config.is_encoder_decoder:
+        if return_dict_in_generate and self.lang_encoder.config.is_encoder_decoder:
             encoder_attentions = model_kwargs["encoder_outputs"].get("attentions") if output_attentions else None
             encoder_hidden_states = (
                 model_kwargs["encoder_outputs"].get("hidden_states") if output_hidden_states else None
@@ -139,17 +139,14 @@ class FlamingoGenerationMixin(GenerationMixin):
                 if this_peer_finished_flag.item() == 0.0:
                     break
 
-            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+            model_inputs = self.lang_encoder.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
             outputs = self.forward(
                 vision_x=vision_x,
                 lang_x=input_ids,  # assuming input_ids are your language inputs
-                return_dict=True,
                 contrastive_decoding=contrastive_decoding,
                 alpha=alpha,
                 beta=beta,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
             )
 
             if synced_gpus and this_peer_finished:
@@ -170,15 +167,15 @@ class FlamingoGenerationMixin(GenerationMixin):
                     scores += (next_token_scores_processed,)
                 if output_attentions:
                     decoder_attentions += (
-                        (outputs.decoder_attentions,) if self.config.is_encoder_decoder else (outputs.attentions,)
+                        (outputs.decoder_attentions,) if self.lang_encoder.config.is_encoder_decoder else (outputs.attentions,)
                     )
-                    if self.config.is_encoder_decoder:
+                    if self.lang_encoder.config.is_encoder_decoder:
                         cross_attentions += (outputs.cross_attentions,)
 
                 if output_hidden_states:
                     decoder_hidden_states += (
                         (outputs.decoder_hidden_states,)
-                        if self.config.is_encoder_decoder
+                        if self.lang_encoder.config.is_encoder_decoder
                         else (outputs.hidden_states,)
                     )
 
@@ -212,11 +209,11 @@ class FlamingoGenerationMixin(GenerationMixin):
 
             input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
 
-            model_kwargs = self._update_model_kwargs_for_generation(
-                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            model_kwargs = self.lang_encoder._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.lang_encoder.config.is_encoder_decoder
             )
             if model_kwargs["past_key_values"] is not None:
-                model_kwargs["past_key_values"] = self._reorder_cache(model_kwargs["past_key_values"], beam_idx)
+                model_kwargs["past_key_values"] = self.lang_encoder._reorder_cache(model_kwargs["past_key_values"], beam_idx)
 
             if return_dict_in_generate and output_scores:
                 beam_indices = tuple((beam_indices[beam_idx[i]] + (beam_idx[i],) for i in range(len(beam_indices))))
@@ -245,7 +242,7 @@ class FlamingoGenerationMixin(GenerationMixin):
             if not output_scores:
                 sequence_outputs["sequence_scores"] = None
 
-            if self.config.is_encoder_decoder:
+            if self.lang_encoder.config.is_encoder_decoder:
                 return BeamSearchEncoderDecoderOutput(
                     sequences=sequence_outputs["sequences"],
                     sequences_scores=sequence_outputs["sequence_scores"],
@@ -296,28 +293,28 @@ class FlamingoGenerationMixin(GenerationMixin):
                 synced_gpus = False
 
         # 1. Handle `generation_config` and kwargs that might update it, and validate the `.generate()` call
-        self._validate_model_class()
+        self.lang_encoder._validate_model_class()
 
         # priority: `generation_config` argument > `model.generation_config` (the default generation config)
         if generation_config is None:
             # legacy: users may modify the model configuration to control generation -- update the generation config
             # model attribute accordingly, if it was created from the model config
-            if self.generation_config._from_model_config:
-                new_generation_config = GenerationConfig.from_model_config(self.config)
-                if new_generation_config != self.generation_config:
+            if self.lang_encoder.generation_config._from_model_config:
+                new_generation_config = GenerationConfig.from_model_config(self.lang_encoder.config)
+                if new_generation_config != self.lang_encoder.generation_config:
                     warnings.warn(
                         "You have modified the pretrained model configuration to control generation. This is a"
                         " deprecated strategy to control generation and will be removed soon, in a future version."
                         " Please use a generation configuration file (see"
                         " https://huggingface.co/docs/transformers/main_classes/text_generation )"
                     )
-                    self.generation_config = new_generation_config
-            generation_config = self.generation_config
+                    self.lang_encoder.generation_config = new_generation_config
+            generation_config = self.lang_encoder.generation_config
 
         generation_config = copy.deepcopy(generation_config)
         model_kwargs = generation_config.update(**kwargs)  # All unused kwargs must be model kwargs
         generation_config.validate()
-        self._validate_model_kwargs(model_kwargs.copy())
+        self.lang_encoder._validate_model_kwargs(model_kwargs.copy())
 
         # 2. Set generation parameters if not already defined
         logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
@@ -340,7 +337,7 @@ class FlamingoGenerationMixin(GenerationMixin):
         # model_input_name is defined if model-specific keyword input is passed
         # otherwise model_input_name is None
         # all model-specific keyword inputs are removed from `model_kwargs`
-        inputs_tensor, model_input_name, model_kwargs = self._prepare_model_inputs(
+        inputs_tensor, model_input_name, model_kwargs = self.lang_encoder._prepare_model_inputs(
             inputs, generation_config.bos_token_id, model_kwargs
         )
         batch_size = inputs_tensor.shape[0]
@@ -350,21 +347,21 @@ class FlamingoGenerationMixin(GenerationMixin):
         model_kwargs["output_hidden_states"] = generation_config.output_hidden_states
         # decoder-only models with inputs_embeds forwarding must use caching (otherwise we can't detect whether we are
         # generating the first new token or not, and we only want to use the embeddings for the first new token)
-        if not self.config.is_encoder_decoder and model_input_name == "inputs_embeds":
+        if not self.lang_encoder.config.is_encoder_decoder and model_input_name == "inputs_embeds":
             model_kwargs["use_cache"] = True
         else:
             model_kwargs["use_cache"] = generation_config.use_cache
 
-        accepts_attention_mask = "attention_mask" in set(inspect.signature(self.forward).parameters.keys())
+        accepts_attention_mask = "attention_mask" in set(inspect.signature(self.lang_encoder.forward).parameters.keys())
         requires_attention_mask = "encoder_outputs" not in model_kwargs
 
         if model_kwargs.get("attention_mask", None) is None and requires_attention_mask and accepts_attention_mask:
-            model_kwargs["attention_mask"] = self._prepare_attention_mask_for_generation(
+            model_kwargs["attention_mask"] = self.lang_encoder._prepare_attention_mask_for_generation(
                 inputs_tensor, generation_config.pad_token_id, generation_config.eos_token_id
             )
 
         # decoder-only models should use left-padding for generation
-        if not self.config.is_encoder_decoder:
+        if not self.lang_encoder.config.is_encoder_decoder:
             # If `input_ids` was given, check if the last id in any sequence is `pad_token_id`
             # Note: If using, `inputs_embeds` this check does not work, because we want to be more hands-off.
             if (
@@ -377,16 +374,16 @@ class FlamingoGenerationMixin(GenerationMixin):
                     "generation results, please set `padding_side='left'` when initializing the tokenizer."
                 )
 
-        if self.config.is_encoder_decoder and "encoder_outputs" not in model_kwargs:
+        if self.lang_encoder.config.is_encoder_decoder and "encoder_outputs" not in model_kwargs:
             # if model is encoder decoder encoder_outputs are created
             # and added to `model_kwargs`
-            model_kwargs = self._prepare_encoder_decoder_kwargs_for_generation(
+            model_kwargs = self.lang_encoder._prepare_encoder_decoder_kwargs_for_generation(
                 inputs_tensor, model_kwargs, model_input_name
             )
 
         # 5. Prepare `input_ids` which will be used for auto-regressive generation
-        if self.config.is_encoder_decoder:
-            input_ids, model_kwargs = self._prepare_decoder_input_ids_for_generation(
+        if self.lang_encoder.config.is_encoder_decoder:
+            input_ids, model_kwargs = self.lang_encoder._prepare_decoder_input_ids_for_generation(
                 batch_size=batch_size,
                 model_input_name=model_input_name,
                 model_kwargs=model_kwargs,
@@ -412,29 +409,29 @@ class FlamingoGenerationMixin(GenerationMixin):
                     "(https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)"
                 )
             generation_config.max_length = generation_config.max_new_tokens + input_ids_length
-        self._validate_generated_length(generation_config, input_ids_length, has_default_max_length)
+        self.lang_encoder._validate_generated_length(generation_config, input_ids_length, has_default_max_length)
 
         # 7. determine generation mode
-        generation_mode = self._get_generation_mode(generation_config, assistant_model)
+        generation_mode = self.lang_encoder._get_generation_mode(generation_config, assistant_model)
 
         if streamer is not None and (generation_config.num_beams > 1):
             raise ValueError(
                 "`streamer` cannot be used with beam search (yet!). Make sure that `num_beams` is set to 1."
             )
 
-        if self.device.type != input_ids.device.type:
+        if self.lang_encoder.device.type != input_ids.device.type:
             warnings.warn(
                 "You are calling .generate() with the `input_ids` being on a device type different"
                 f" than your model's device. `input_ids` is on {input_ids.device.type}, whereas the model"
-                f" is on {self.device.type}. You may experience unexpected behaviors or slower generation."
+                f" is on {self.lang_encoder.device.type}. You may experience unexpected behaviors or slower generation."
                 " Please make sure that you have put `input_ids` to the"
-                f" correct device by calling for example input_ids = input_ids.to('{self.device.type}') before"
+                f" correct device by calling for example input_ids = input_ids.to('{self.lang_encoder.device.type}') before"
                 " running `.generate()`.",
                 UserWarning,
             )
 
         # 8. prepare distribution pre_processing samplers
-        logits_processor = self._get_logits_processor(
+        logits_processor = self.lang_encoder._get_logits_processor(
             generation_config=generation_config,
             input_ids_seq_length=input_ids_length,
             encoder_input_ids=inputs_tensor,
@@ -446,7 +443,7 @@ class FlamingoGenerationMixin(GenerationMixin):
         )
 
         # 9. prepare stopping criteria
-        stopping_criteria = self._get_stopping_criteria(
+        stopping_criteria = self.lang_encoder._get_stopping_criteria(
             generation_config=generation_config, stopping_criteria=stopping_criteria
         )
 
@@ -462,10 +459,10 @@ class FlamingoGenerationMixin(GenerationMixin):
                 max_length=generation_config.max_length,
             )
             # 12. interleave input_ids with `num_beams` additional sequences per batch
-            input_ids, model_kwargs = self._expand_inputs_for_generation(
+            input_ids, model_kwargs = self.lang_encoder._expand_inputs_for_generation(
                 input_ids=input_ids,
                 expand_size=generation_config.num_beams,
-                is_encoder_decoder=self.config.is_encoder_decoder,
+                is_encoder_decoder=self.lang_encoder.config.is_encoder_decoder,
                 **model_kwargs,
             )
             # 13. run beam search
