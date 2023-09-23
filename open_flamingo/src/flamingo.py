@@ -143,7 +143,7 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
 
         if clear_conditioned_layers:
             self.lang_encoder.clear_conditioned_layers()
-    
+
         output = output_vision
         return output
 

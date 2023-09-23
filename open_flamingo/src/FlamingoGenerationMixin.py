@@ -145,6 +145,9 @@ class FlamingoGenerationMixin(GenerationMixin):
                 vision_x=vision_x,
                 lang_x=input_ids,  # assuming input_ids are your language inputs
                 return_dict=True,
+                contrastive_decoding=contrastive_decoding,
+                alpha=alpha,
+                beta=beta,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
             )
