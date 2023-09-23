@@ -6,24 +6,23 @@ from torch.distributed.fsdp.wrap import (
     enable_wrap,
     wrap,
 )
-from transformers.modeling_outputs import CausalLMOutputWithPast
 from torch.distributed.fsdp import (
     FullyShardedDataParallel as FSDP,
 )
-
+from FlamingoGenerationMixin import FlamingoGenerationMixin
 from .utils import apply_with_stopping_condition
+from math import log
 
-
-class Flamingo(nn.Module):
+class Flamingo(nn.Module, FlamingoGenerationMixin):
     def __init__(
-        self,
-        vision_encoder: nn.Module,
-        lang_encoder: nn.Module,
-        eoc_token_id: int,
-        media_token_id: int,
-        vis_dim: int,
-        cross_attn_every_n_layers: int = 1,
-        gradient_checkpointing: bool = False,
+            self,
+            vision_encoder: nn.Module,
+            lang_encoder: nn.Module,
+            eoc_token_id: int,
+            media_token_id: int,
+            vis_dim: int,
+            cross_attn_every_n_layers: int = 1,
+            gradient_checkpointing: bool = False,
     ):
         """
         Args:
@@ -58,14 +57,17 @@ class Flamingo(nn.Module):
         self.perceiver._use_gradient_checkpointing = gradient_checkpointing
 
     def forward(
-        self,
-        vision_x: torch.Tensor,
-        lang_x: torch.Tensor,
-        attention_mask: torch.Tensor = None,
-        labels: torch.Tensor = None,
-        clear_conditioned_layers: bool = True,
-        past_key_values=None,
-        use_cache: bool = False,
+            self,
+            vision_x: torch.Tensor,
+            lang_x: torch.Tensor,
+            contrastive_decoding: bool = False,
+            alpha: float = 0.5,
+            beta: float = 0.5,
+            attention_mask: torch.Tensor = None,
+            labels: torch.Tensor = None,
+            clear_conditioned_layers: bool = True,
+            past_key_values=None,
+            use_cache: bool = False,
     ):
         """
         Forward pass of Flamingo.
@@ -75,6 +77,9 @@ class Flamingo(nn.Module):
                 shape (B, T_img, F, C, H, W) with F=1
             lang_x (torch.Tensor): Language input ids
                 shape (B, T_txt)
+            contrastive_decoding (bool, optional): Whether to use contrastive decoding. Defaults to False.
+            alpha (float, optional): Contrastive decoding parameter. Defaults to 0.5.
+            beta (float, optional): Contrastive decoding parameter. Defaults to 0.5.
             attention_mask (torch.Tensor, optional): Attention mask. Defaults to None.
             labels (torch.Tensor, optional): Labels. Defaults to None.
             clear_conditioned_layers: if True, clear the conditioned layers
@@ -92,14 +97,14 @@ class Flamingo(nn.Module):
         ), "Flamingo layers are not initialized. Please call `init_flamingo` first."
 
         assert (
-            self.lang_encoder._use_cached_vision_x or vision_x is not None
+                self.lang_encoder._use_cached_vision_x or vision_x is not None
         ), "Must provide either vision_x or have precached media using cache_media()."
 
         if self.lang_encoder._use_cached_vision_x:
             # Case: use cached; vision_x should be cached and other
             # vision-related inputs should not be provided.
             assert (
-                vision_x is None
+                    vision_x is None
             ), "Expect vision_x to be None when media has been cached using cache_media(). Try uncache_media() first."
             assert self.lang_encoder.is_conditioned()
 
@@ -108,7 +113,7 @@ class Flamingo(nn.Module):
             self._encode_vision_x(vision_x=vision_x)
             self._condition_media_locations(input_ids=lang_x)
 
-        output = self.lang_encoder(
+        output_vision = self.lang_encoder(
             input_ids=lang_x,
             attention_mask=attention_mask,
             labels=labels,
@@ -116,17 +121,41 @@ class Flamingo(nn.Module):
             use_cache=use_cache,
         )
 
+        if contrastive_decoding:
+            self.lang_encoder.clear_conditioned_layers()
+            output_blind = self.lang_encoder(
+                input_ids=lang_x,
+                attention_mask=attention_mask,
+                labels=labels,
+                past_key_values=past_key_values,
+                use_cache=use_cache
+            )
+
+            """
+            TODO: Make sure the math below is correct
+            """
+            vision_logits = output_vision.logits
+            blind_logits = output_blind.logits
+            cutoff = log(alpha) + vision_logits.max().values
+            diffs = (1 + beta) * vision_logits - beta * blind_logits
+            cd_logits = diffs.masked_fill(vision_logits < cutoff, -float('inf'))
+            output_vision.logits = cd_logits
+
         if clear_conditioned_layers:
             self.lang_encoder.clear_conditioned_layers()
-
+    
+        output = output_vision
         return output
 
     def generate(
-        self,
-        vision_x: torch.Tensor,
-        lang_x: torch.Tensor,
-        attention_mask: torch.Tensor = None,
-        **kwargs,
+            self,
+            vision_x: torch.Tensor,
+            lang_x: torch.Tensor,
+            attention_mask: torch.Tensor = None,
+            contrastive_decoding: bool = False,
+            alpha: float = 0.5,  # Change
+            beta: float = 0.5,  # Change
+            **kwargs,
     ):
         """
         Generate text conditioned on vision and language inputs.
@@ -158,20 +187,34 @@ class Flamingo(nn.Module):
         if num_beams > 1:
             vision_x = vision_x.repeat_interleave(num_beams, dim=0)
 
-        self.lang_encoder._use_cached_vision_x = True
-        self._encode_vision_x(vision_x=vision_x)
-
         eos_token_id = kwargs.pop("eos_token_id", self.eoc_token_id)
-        output = self.lang_encoder.generate(
-            input_ids=lang_x,
-            attention_mask=attention_mask,
-            eos_token_id=eos_token_id,
-            num_beams=num_beams,
-            **kwargs,
-        )
+        self.lang_encoder._use_cached_vision_x = True
+        if not contrastive_decoding:
+            self._encode_vision_x(vision_x=vision_x)
+
+            output = self.lang_encoder.generate(
+                input_ids=lang_x,
+                attention_mask=attention_mask,
+                eos_token_id=eos_token_id,
+                num_beams=num_beams,
+                **kwargs,
+            )
+        else:
+            output = self.conde_generate(
+                inputs=lang_x,
+                vision_x=vision_x,
+                attention_mask=attention_mask,
+                contrastive_decoding=contrastive_decoding,
+                alpha=alpha,
+                beta=beta,
+                eos_token_id=eos_token_id,
+                num_beams=num_beams,
+                **kwargs,
+            )
 
         self.lang_encoder.clear_conditioned_layers()
         self.lang_encoder._use_cached_vision_x = False
+
         return output
 
     def _encode_vision_x(self, vision_x: torch.Tensor):
