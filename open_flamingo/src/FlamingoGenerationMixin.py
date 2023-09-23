@@ -272,7 +272,7 @@ class FlamingoGenerationMixin(GenerationMixin):
             inputs: Optional[torch.Tensor] = None,
             vision_x: Optional[torch.Tensor] = None,
             contrastive_decoding: Optional[bool] = False,
-            alpha: Optional[float] = 0.5,
+            alpha: Optional[float] = 0.1,
             beta: Optional[float] = 0.5,
             generation_config: Optional[GenerationConfig] = None,
             logits_processor: Optional[LogitsProcessorList] = None,

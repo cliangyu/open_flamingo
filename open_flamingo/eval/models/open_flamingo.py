@@ -129,6 +129,8 @@ class EvalModel(BaseEvalModel):
         num_beams: int,
         length_penalty: float,
         contrastive_decoding: bool,
+        alpha: float,
+        beta: float,
     ) -> List[str]:
         """
         Get generation outputs.
@@ -147,6 +149,8 @@ class EvalModel(BaseEvalModel):
                     num_beams=num_beams,
                     length_penalty=length_penalty,
                     contrastive_decoding=contrastive_decoding,
+                    alpha=alpha, 
+                    beta=beta,
                 )
 
         # Extract only the new gnerated tokens

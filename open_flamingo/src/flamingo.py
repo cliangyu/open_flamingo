@@ -154,8 +154,8 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
             lang_x: torch.Tensor,
             attention_mask: torch.Tensor = None,
             contrastive_decoding: bool = False,
-            alpha: float = 0.5,  # Change
-            beta: float = 0.5,  # Change
+            alpha: float = 0.1,  # Change
+            beta: float = 0.25,  # Change
             **kwargs,
     ):
         """

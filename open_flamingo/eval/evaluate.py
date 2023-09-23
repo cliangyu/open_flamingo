@@ -44,6 +44,18 @@ parser.add_argument(
     action="store_true",
     help="Whether to use contrastive decoding",
 )
+parser.add_argument(
+    "--alpha",
+    type=float,
+    default=0.1,
+    help="For contrastive decoding threshold sampling",
+)
+parser.add_argument(
+    "--beta",
+    type=float,
+    default=0.5,
+    help="For contrastive decoding logits substraction",
+)
 
 parser.add_argument(
     "--model",
@@ -411,6 +423,15 @@ def main():
     device_id = init_distributed_device(args)
     eval_model.set_device(device_id)
     eval_model.init_distributed()
+    
+    # print args
+    if args.rank == 0:
+        print("#"*10)
+        print("Args:")
+        print(args)
+        print("Model args:")
+        print(model_args)
+        print("#"*10)
 
     if args.model != "open_flamingo" and args.shots != [0]:
         raise ValueError("Only 0 shot eval is supported for non-open_flamingo models")
@@ -855,6 +876,8 @@ def evaluate_captioning(
             num_beams=num_beams,
             length_penalty=length_penalty,
             contrastive_decoding=args.conde,
+            alpha=args.alpha,
+            beta=args.beta,       
         )
 
         new_predictions = [
@@ -1049,6 +1072,8 @@ def evaluate_vqa(
             num_beams=num_beams,
             length_penalty=length_penalty,
             contrastive_decoding=args.conde,
+            alpha=args.alpha,
+            beta=args.beta, 
         )
 
         process_function = (
