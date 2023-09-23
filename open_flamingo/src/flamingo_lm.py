@@ -1,7 +1,7 @@
 import torch.nn as nn
 from .helpers import GatedCrossAttentionBlock
 from .utils import getattr_recursive, setattr_recursive
-
+import warnings
 
 class FlamingoLayer(nn.Module):
     """
@@ -44,20 +44,23 @@ class FlamingoLayer(nn.Module):
     ):
         # Cross attention
         if self.gated_cross_attn_layer is not None:
-            if self.vis_x is None:
-                raise ValueError("vis_x must be conditioned before forward pass")
+            if self.vis_x is not None and self.media_locations is not None:   
+                # if self.vis_x is None:
+                #     raise ValueError("vis_x must be conditioned before forward pass")
 
-            if self.media_locations is None:
-                raise ValueError(
-                    "media_locations must be conditioned before forward pass"
+                # if self.media_locations is None:
+                #     raise ValueError(
+                #         "media_locations must be conditioned before forward pass"
+                #     )
+
+                lang_x = self.gated_cross_attn_layer(
+                    lang_x,
+                    self.vis_x,
+                    media_locations=self.media_locations,
+                    use_cached_media=self.use_cached_media,
                 )
-
-            lang_x = self.gated_cross_attn_layer(
-                lang_x,
-                self.vis_x,
-                media_locations=self.media_locations,
-                use_cached_media=self.use_cached_media,
-            )
+            else:
+                warnings.warn("gated_cross_attn_layer skipped! This is only expected in contrastive decoding.")
 
         # Normal decoder layer
         lang_x = self.decoder_layer(

@@ -137,7 +137,7 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
             """
             vision_logits = output_vision.logits
             blind_logits = output_blind.logits
-            cutoff = log(alpha) + vision_logits.max().values
+            cutoff = log(alpha) + vision_logits.max(dim=-1, keepdim=True).values
             diffs = (1 + beta) * vision_logits - beta * blind_logits
             cd_logits = diffs.masked_fill(vision_logits < cutoff, -float('inf'))
             output_vision.logits = cd_logits
