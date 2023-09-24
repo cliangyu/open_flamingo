@@ -57,6 +57,14 @@ parser.add_argument(
     help="For contrastive decoding logits substraction",
 )
 
+# beam search
+parser.add_argument(
+    "--num_beams",
+    type=int,
+    default=3,
+    help="Set 1 for greedy search",
+)
+
 parser.add_argument(
     "--model",
     type=str,
@@ -462,6 +470,7 @@ def main():
                     seed=seed,
                     dataset_name="flickr",
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0:
                     print(f"Shots {shot} Trial {trial} CIDEr score: {cider_score}")
@@ -499,6 +508,7 @@ def main():
                     seed=seed,
                     dataset_name="coco",
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0:
                     print(f"Shots {shot} Trial {trial} CIDEr score: {cider_score}")
@@ -536,6 +546,7 @@ def main():
                     seed=seed,
                     dataset_name="ok_vqa",
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0:
                     print(f"Shots {shot} Trial {trial} OK-VQA score: {ok_vqa_score}")
@@ -573,6 +584,7 @@ def main():
                     seed=seed,
                     dataset_name="vqav2",
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0 and vqa_score is not None:
                     print(f"Shots {shot} Trial {trial} VQA score: {vqa_score}")
@@ -610,6 +622,7 @@ def main():
                     seed=seed,
                     dataset_name="vizwiz",
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0 and vizwiz_score is not None:
                     print(f"Shots {shot} Trial {trial} VizWiz score: {vizwiz_score}")
@@ -648,6 +661,7 @@ def main():
                     dataset_name="textvqa",
                     max_generation_length=10,
                     cached_features=cached_features,
+                    num_beams=args.num_beams,
                 )
                 if args.rank == 0:
                     print(f"Shots {shot} Trial {trial} TextVQA score: {textvqa_score}")
