@@ -60,13 +60,18 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
     def forward(
             self,
             vision_x: torch.Tensor,
-            lang_x: torch.Tensor,
+            input_ids: torch.Tensor,
             contrastive_decoding: bool = False,
             alpha: float = 0.5,
             beta: float = 0.5,
             attention_mask: torch.Tensor = None,
             labels: torch.Tensor = None,
             clear_conditioned_layers: bool = True,
+            return_dict: bool = True,
+            prefix_mask: torch.Tensor = None,
+            sequence_id: torch.Tensor = None,
+            output_attentions: bool = False,
+            output_hidden_states: bool = False,
             past_key_values=None,
             use_cache: bool = False,
     ):
@@ -112,24 +117,44 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
         else:
             # Case: do not use caching (i.e. this is a standard forward pass);
             self._encode_vision_x(vision_x=vision_x)
-            self._condition_media_locations(input_ids=lang_x)
-
+            self._condition_media_locations(input_ids=input_ids)
+        
         output_vision = self.lang_encoder(
-            input_ids=lang_x,
+            input_ids=input_ids,
             attention_mask=attention_mask,
             labels=labels,
             past_key_values=past_key_values,
             use_cache=use_cache,
+            return_dict=return_dict,
+            prefix_mask=prefix_mask,
+            sequence_id=sequence_id,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
         )
 
         if contrastive_decoding:
             self.lang_encoder.clear_conditioned_layers()
+            
+            
+            # input_ids_blind, attention_mask_blind = self.remove_and_pad(tokens_to_remove=[50277, 50278], 
+            #                                                             padding_token=50279, 
+            #                                                             padding_attention=False, 
+            #                                                             input_ids=input_ids, 
+            #                                                             attention_mask=attention_mask)
+            # input_ids_blind, attention_mask_blind = self.replace_tokens(input_ids=input_ids, attention_mask=attention_mask)
+            input_ids_blind, attention_mask_blind = input_ids, attention_mask
+            
             output_blind = self.lang_encoder(
-                input_ids=lang_x,
-                attention_mask=attention_mask,
+                input_ids=input_ids_blind,
+                attention_mask=attention_mask_blind,
                 labels=labels,
                 past_key_values=past_key_values,
-                use_cache=use_cache
+                use_cache=use_cache,
+                return_dict=return_dict,
+                prefix_mask=prefix_mask,
+                sequence_id=sequence_id,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
             )
 
             """
@@ -147,6 +172,79 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
 
         output = output_vision
         return output
+    
+    def replace_tokens(self, input_ids, attention_mask):
+        """
+        Replaces 50278 and 50277 with 50279 in input_ids.
+        
+        Args:
+            input_ids (torch.Tensor): Input ids tensor
+        
+        Returns:
+            torch.Tensor: Updated input_ids
+        """
+        
+        # Define the tokens
+        tokens_to_replace = [50277, 50278]
+        new_token = 50276 # "  "
+        
+        # Convert list of tokens to a tensor for efficient operation
+        tokens_to_replace = torch.tensor(tokens_to_replace)
+        
+        # Replace tokens
+        input_ids[input_ids == tokens_to_replace[0]] = new_token
+        input_ids[input_ids == tokens_to_replace[1]] = new_token
+        # attention_mask[input_ids == new_token] = False
+        
+        return input_ids, attention_mask
+    
+    def remove_and_pad(self, tokens_to_remove, padding_token, padding_attention, input_ids, attention_mask):
+        """
+        Removes the tokens_to_remove from input_ids and attention_mask, 
+        connects elements before and after the removed token, and adds 
+        padding_token at the start and the end until original length is maintained.
+        
+        Args:
+            tokens_to_remove (list): List of token ids to remove
+            padding_token (int): Padding token id
+            padding_attention (bool): Padding attention value
+            input_ids (torch.Tensor): Input ids tensor
+            attention_mask (torch.Tensor): Attention mask tensor
+        
+        Returns:
+            torch.Tensor, torch.Tensor: Updated input_ids and attention_mask
+        """
+        
+        original_length = input_ids.shape[1]
+        
+        # Convert list of tokens to a tensor for efficient operation
+        tokens_to_remove = torch.tensor(tokens_to_remove).to(input_ids.device)
+        
+        # Iterate over each sample in the batch
+        for i in range(input_ids.size(0)):
+            # Find the indices where the tokens to be removed are located
+            remove_indices = torch.isin(input_ids[i], tokens_to_remove)
+            
+            # Invert the mask to get indices of tokens to be retained
+            retain_indices = ~remove_indices
+            
+            # Filter out the tokens to be removed
+            updated_input_ids = input_ids[i][retain_indices]
+            updated_attention_mask = attention_mask[i][retain_indices]
+            
+            # Calculate number of padding tokens required to maintain the original length
+            padding_count = original_length - len(updated_input_ids)
+            
+            # Add padding tokens
+            updated_input_ids = torch.cat([torch.tensor([padding_token]*padding_count).to(input_ids.device), updated_input_ids], dim=0)
+            updated_attention_mask = torch.cat([torch.tensor([padding_attention]*padding_count).to(input_ids.device), updated_attention_mask], dim=0)
+            
+            # Update the input_ids and attention_mask tensors
+            input_ids[i] = updated_input_ids
+            attention_mask[i] = updated_attention_mask
+        
+        return input_ids, attention_mask
+
 
     def generate(
             self,

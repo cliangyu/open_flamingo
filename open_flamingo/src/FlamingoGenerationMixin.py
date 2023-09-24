@@ -141,12 +141,26 @@ class FlamingoGenerationMixin(GenerationMixin):
 
             model_inputs = self.lang_encoder.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
+            # outputs = self.forward(
+            #     vision_x=vision_x,
+            #     lang_x=model_inputs["input_ids"],  # assuming input_ids are your language inputs
+            #     attention_mask = model_inputs["attention_mask"],
+            #     contrastive_decoding=contrastive_decoding,
+            #     alpha=alpha,
+            #     beta=beta,
+            # )
+            
+            model_inputs['use_cache'] = False # TODO: debugging CD now, use cache later
+
             outputs = self.forward(
                 vision_x=vision_x,
-                lang_x=input_ids,  # assuming input_ids are your language inputs
                 contrastive_decoding=contrastive_decoding,
                 alpha=alpha,
                 beta=beta,
+                **model_inputs,
+                return_dict=True,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
             )
 
             if synced_gpus and this_peer_finished:
