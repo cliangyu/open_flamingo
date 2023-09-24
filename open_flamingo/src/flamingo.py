@@ -68,12 +68,11 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
             labels: torch.Tensor = None,
             clear_conditioned_layers: bool = True,
             return_dict: bool = True,
-            prefix_mask: torch.Tensor = None,
-            sequence_id: torch.Tensor = None,
             output_attentions: bool = False,
             output_hidden_states: bool = False,
             past_key_values=None,
             use_cache: bool = False,
+            **kwargs,
     ):
         """
         Forward pass of Flamingo.
@@ -126,10 +125,9 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
             past_key_values=past_key_values,
             use_cache=use_cache,
             return_dict=return_dict,
-            prefix_mask=prefix_mask,
-            sequence_id=sequence_id,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
+            **kwargs,
         )
 
         if contrastive_decoding:
@@ -151,10 +149,9 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
                 past_key_values=past_key_values,
                 use_cache=use_cache,
                 return_dict=return_dict,
-                prefix_mask=prefix_mask,
-                sequence_id=sequence_id,
                 output_attentions=output_attentions,
                 output_hidden_states=output_hidden_states,
+                **kwargs,
             )
 
             """
