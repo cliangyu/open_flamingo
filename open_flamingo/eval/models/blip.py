@@ -30,6 +30,24 @@ class EvalModel(BaseEvalModel):
         self.processor.tokenizer.padding_side = "left"
         self.lm_name = model_args["lm_path"].split("/")[-1]
 
+    def forward(self,
+        pixel_values,
+        input_ids,
+        attention_mask,
+        decoder_input_ids,
+        decoder_attention_mask,
+        output_attentions= None,
+        output_hidden_states = None,
+        labels = None,
+        return_dict = None,
+        contrastive_decoding = False,
+        alpha = 0.1,
+        beta = 0.5,
+        ):
+
+        pass
+
+
     def _prepare_images(self, batch: List[List[torch.Tensor]]) -> torch.Tensor:
         """Preprocess images and stack them.
 
@@ -72,6 +90,9 @@ class EvalModel(BaseEvalModel):
         max_generation_length: int,
         num_beams: int,
         length_penalty: float,
+        contrastive_decoding: bool,
+            alpha: float,
+            beta: float,
     ) -> List[str]:
         encodings = self.processor.tokenizer(
             batch_text,

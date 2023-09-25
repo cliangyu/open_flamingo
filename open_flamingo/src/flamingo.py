@@ -183,15 +183,16 @@ class Flamingo(nn.Module, FlamingoGenerationMixin):
         
         # Define the tokens
         tokens_to_replace = [50277, 50278]
+        # tokens_to_replace = [50278]
         new_token = 50276 # "  "
         
         # Convert list of tokens to a tensor for efficient operation
         tokens_to_replace = torch.tensor(tokens_to_replace)
         
         # Replace tokens
-        input_ids[input_ids == tokens_to_replace[0]] = new_token
-        input_ids[input_ids == tokens_to_replace[1]] = new_token
-        # attention_mask[input_ids == new_token] = False
+        for old_token in tokens_to_replace:
+            input_ids[input_ids == old_token] = new_token
+        attention_mask[input_ids == new_token] = False
         
         return input_ids, attention_mask
     
