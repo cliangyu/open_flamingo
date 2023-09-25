@@ -1,6 +1,7 @@
 from transformers import Blip2Config, Blip2QFormerConfig, Blip2VisionConfig, Blip2PreTrainedModel, Blip2VisionModel, \
     Blip2QFormerModel
-from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGenerationModelOutput
+from transformers.models.blip_2.modeling_blip_2 import Blip2ForConditionalGenerationModelOutput, \
+    Blip2ForConditionalGeneration
 from transformers import AutoModelForCausalLM, AutoModelForSeq2SeqLM
 from torch.nn import CrossEntropyLoss
 from dataclasses import dataclass
@@ -9,7 +10,7 @@ from torch import nn
 from typing import Any, Optional, Tuple, Union
 from .Blip2GenerationMixin import Blip2GenerationMixin
 
-class Blip2(Blip2GenerationMixin, Blip2PreTrainedModel):
+class Blip2(Blip2GenerationMixin, Blip2ForConditionalGeneration):
     def forward(
             self,
             pixel_values: torch.FloatTensor,
