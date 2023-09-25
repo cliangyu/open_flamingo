@@ -304,9 +304,8 @@ class Blip2GenerationMixin(GenerationMixin):
     @torch.no_grad()
     def conde_generate(
             self,
-            inputs: Optional[torch.Tensor] = None,
-            contrastive_decoding: Optional[bool] = False,
-            text_input_embeds: Optional[torch.Tensor] = None,
+            inputs_embeds: Optional[torch.Tensor] = None,
+            text_inputs_embeds: Optional[torch.Tensor] = None,
             text_attention_mask: Optional[torch.Tensor] = None,
             alpha: Optional[float] = 0.1,
             beta: Optional[float] = 0.5,
@@ -369,7 +368,7 @@ class Blip2GenerationMixin(GenerationMixin):
             generation_config.pad_token_id = eos_token_id
 
         text_model_kwargs = model_kwargs.copy()
-        text_model_kwargs['input_embeds'] = text_input_embeds
+        text_model_kwargs['input_embeds'] = text_inputs_embeds
         text_model_kwargs['attention_mask'] = text_attention_mask
 
         # 3. Define model inputs
@@ -378,10 +377,10 @@ class Blip2GenerationMixin(GenerationMixin):
         # otherwise model_input_name is None
         # all model-specific keyword inputs are removed from `model_kwargs`
         inputs_tensor, model_input_name, model_kwargs = self.lang_encoder._prepare_model_inputs(
-            inputs, generation_config.bos_token_id, model_kwargs
+            inputs_embeds, generation_config.bos_token_id, model_kwargs
         )
         text_inputs_tensor, text_model_input_name, text_model_kwargs = self.lang_encoder._prepare_model_inputs(
-            text_input_embeds, generation_config.bos_token_id, text_model_kwargs
+            text_inputs_embeds, generation_config.bos_token_id, text_model_kwargs
         )
 
         batch_size = inputs_tensor.shape[0]
@@ -425,7 +424,7 @@ class Blip2GenerationMixin(GenerationMixin):
                 inputs_tensor, model_kwargs, model_input_name
             )
             text_model_kwargs = model_kwargs.copy()
-            text_model_kwargs['input_embeds'] = text_input_embeds
+            text_model_kwargs['input_embeds'] = text_inputs_embeds
             text_model_kwargs['attention_mask'] = text_attention_mask
             text_model_kwargs = self.lang_encoder._prepare_encoder_decoder_kwargs_for_generation(
                 text_inputs_tensor, text_model_kwargs, text_model_input_name
