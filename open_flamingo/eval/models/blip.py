@@ -3,9 +3,10 @@ from typing import List
 from PIL import Image
 import torch
 
-from transformers import Blip2Processor, Blip2ForConditionalGeneration
+from transformers import Blip2Processor
 from open_flamingo.eval.eval_model import BaseEvalModel
 from open_flamingo.eval.utils import unwrap_model
+from open_flamingo.src.blip2 import Blip2
 
 
 class EvalModel(BaseEvalModel):
@@ -23,29 +24,40 @@ class EvalModel(BaseEvalModel):
         ), "BLIP-2 requires processor_path, lm_path, and device arguments to be specified"
 
         self.processor = Blip2Processor.from_pretrained(model_args["processor_path"])
-        self.model = Blip2ForConditionalGeneration.from_pretrained(
+        self.model = Blip2.from_pretrained(
             model_args["lm_path"]
         )
         self.model.eval()
         self.processor.tokenizer.padding_side = "left"
         self.lm_name = model_args["lm_path"].split("/")[-1]
-
-    def forward(self,
-        pixel_values,
-        input_ids,
-        attention_mask,
-        decoder_input_ids,
-        decoder_attention_mask,
-        output_attentions= None,
-        output_hidden_states = None,
-        labels = None,
-        return_dict = None,
-        contrastive_decoding = False,
-        alpha = 0.1,
-        beta = 0.5,
-        ):
-
-        pass
+    #
+    # def forward(self,
+    #     pixel_values,
+    #     input_ids,
+    #     attention_mask,
+    #     decoder_input_ids,
+    #     decoder_attention_mask,
+    #     output_attentions= None,
+    #     output_hidden_states = None,
+    #     labels = None,
+    #     return_dict = None,
+    #     contrastive_decoding = False,
+    #     alpha = 0.1,
+    #     beta = 0.5,
+    #     head_mask = None,
+    #             decoder_head_mask = None,
+    #             decoder_attention_mask = None,
+    #             cross_attn_head_mask = None,
+    #             use_cache = None,
+    #             past_key_values = None,
+    #
+    #     ):
+    #
+    #     # Vision output
+    #     vision_output = unwrap_model(self.model)(
+    #
+    #
+    #     pass
 
 
     def _prepare_images(self, batch: List[List[torch.Tensor]]) -> torch.Tensor:
@@ -91,8 +103,8 @@ class EvalModel(BaseEvalModel):
         num_beams: int,
         length_penalty: float,
         contrastive_decoding: bool,
-            alpha: float,
-            beta: float,
+        alpha: float,
+        beta: float,
     ) -> List[str]:
         encodings = self.processor.tokenizer(
             batch_text,
@@ -113,6 +125,9 @@ class EvalModel(BaseEvalModel):
                 min_new_tokens=min_generation_length,
                 num_beams=num_beams,
                 length_penalty=length_penalty,
+                contrastive_decoding=contrastive_decoding,
+                alpha=alpha,
+                beta=beta,
             )
 
         return self.processor.tokenizer.batch_decode(outputs, skip_special_tokens=True)
@@ -136,3 +151,4 @@ class EvalModel(BaseEvalModel):
         raise NotImplementedError(
             "BLIP-2 classification-based evaluation not implemented"
         )
+
