@@ -115,7 +115,7 @@ class EvalModel(BaseEvalModel):
         )
         input_ids = encodings["input_ids"]
         attention_mask = encodings["attention_mask"]
-
+        print(batch_text[0])
         with torch.inference_mode():
             outputs = unwrap_model(self.model).generate(
                 self._prepare_images(batch_images).to(self.device),

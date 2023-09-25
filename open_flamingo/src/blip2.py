@@ -166,10 +166,10 @@ class Blip2(Blip2GenerationMixin, Blip2ForConditionalGeneration):
             )
         else:
             outputs = self.conde_generate(
-                text_inputs_embeds=inputs_embeds,
-                text_attention_mask=attention_mask,
                 inputs_embeds=mm_inputs_embeds,
                 attention_mask=mm_attention_mask,
+                text_inputs_embeds=inputs_embeds,
+                text_attention_mask=attention_mask,
                 alpha=alpha,
                 beta=beta,
                 **generate_kwargs,
